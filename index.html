@@ -3,39 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FINANCIAL CORE | Intelligence Terminal</title>
+    <title>FINANCIAL CORE | Professional Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Inter:wght@300;400;700;900&display=swap');
-        :root { --bg: #05070a; --card: #0f172a; --accent: #3b82f6; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: #f1f5f9; scroll-behavior: smooth; }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;500&family=Inter:wght@300;400;600;800&display=swap');
+        
+        :root {
+            --bg-ultra-dark: #030712;
+            --card-surface: #0f172a;
+            --accent-primary: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body {
+            background-color: var(--bg-ultra-dark);
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
-        .nav-btn { position: relative; transition: all 0.3s; color: #94a3b8; }
-        .nav-btn.active { color: var(--accent); font-weight: 700; }
-        .nav-btn.active::after { content: ''; position: absolute; bottom: -20px; left: 0; width: 100%; height: 2px; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
-        .card-stat { transition: transform 0.3s ease; border: 1px solid #1e293b; }
-        .card-stat:hover { transform: translateY(-5px); border-color: var(--accent); }
-        /* Animaciones */
-        .page-fade { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Estética Financial Hub: Bordes ultra-suaves y glassmorphism */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+        }
+
+        .nav-item {
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: #94a3b8;
+        }
+
+        .nav-item.active {
+            color: var(--accent-primary);
+        }
+
+        .nav-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 3px;
+            background: var(--accent-primary);
+            box-shadow: 0 0 15px var(--accent-primary);
+            border-radius: 10px;
+        }
+
+        /* Tabla Estilo Terminal */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+        .row-hover:hover {
+            background: rgba(59, 130, 246, 0.05);
+            border-left: 3px solid var(--accent-primary);
+        }
+
+        /* Animación de carga de datos */
+        @keyframes pulse-border {
+            0% { border-color: rgba(59, 130, 246, 0.2); }
+            50% { border-color: rgba(59, 130, 246, 0.8); }
+            100% { border-color: rgba(59, 130, 246, 0.2); }
+        }
+        .loading-active { animation: pulse-border 2s infinite; }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen antialiased">
 
-    <div class="w-full bg-slate-950 border-b border-slate-900 h-10 overflow-hidden">
+    <nav class="sticky top-0 z-[100] bg-slate-950/80 backdrop-blur-xl border-b border-white/5 px-8 h-20 flex items-center justify-between">
+        <div class="flex items-center gap-14">
+            <div class="flex items-center gap-3 group cursor-pointer">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-2xl shadow-blue-500/20 group-hover:scale-110 transition">
+                    <i class="fa-solid fa-layer-group text-white text-lg"></i>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-xl font-extrabold tracking-tighter leading-none">FINANCIAL <span class="text-blue-500">CORE</span></span>
+                    <span class="text-[9px] font-bold text-slate-500 tracking-[0.3em] uppercase">Intelligence Hub</span>
+                </div>
+            </div>
+
+            <div class="hidden lg:flex gap-10 text-[11px] font-black uppercase tracking-widest">
+                <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active">Dashboard</button>
+                <button onclick="navigate('analisis')" id="nav-analisis" class="nav-item">Análisis Técnico</button>
+                <button onclick="navigate('screener')" id="nav-screener" class="nav-item">Screener IA</button>
+                <button onclick="navigate('patrimonio')" id="nav-patrimonio" class="nav-item">Global Portfolio</button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-6">
+            <div class="hidden xl:flex items-center gap-4 border-l border-white/10 pl-6">
+                <div class="text-right">
+                    <p class="text-[9px] text-slate-500 font-bold">ÚLTIMA ACTUALIZACIÓN</p>
+                    <p id="last-update" class="text-[11px] font-mono text-blue-400 italic">Sincronizando...</p>
+                </div>
+                <button onclick="refreshAll()" class="w-8 h-8 rounded-full hover:bg-white/5 flex items-center justify-center transition">
+                    <i class="fa-solid fa-rotate text-xs text-slate-400"></i>
+                </button>
+            </div>
+            <div class="h-10 w-[1px] bg-white/10 mx-2"></div>
+            <button class="bg-white text-black text-[11px] font-black px-6 py-2.5 rounded-full hover:bg-blue-500 hover:text-white transition-all shadow-xl active:scale-95">
+                ÁREA PRIVADA
+            </button>
+        </div>
+    </nav>
+
+    <div class="h-10 bg-black border-b border-white/5 overflow-hidden">
         <div class="tradingview-widget-container">
             <div class="tradingview-widget-container__widget"></div>
             <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
             {
                 "symbols": [
-                    {"proName": "BITSTAMP:BTCUSD", "title": "Bitcoin"},
                     {"proName": "NASDAQ:MSFT", "title": "Microsoft"},
-                    {"proName": "BME:ITX", "title": "Inditex"},
                     {"proName": "BME:NXT", "title": "Nextil"},
+                    {"proName": "BITSTAMP:BTCUSD", "title": "Bitcoin"},
+                    {"proName": "BME:ITX", "title": "Inditex"},
                     {"proName": "FX_IDC:EURUSD", "title": "EUR/USD"},
-                    {"proName": "INDEX:IBEX", "title": "IBEX 35"}
+                    {"proName": "NASDAQ:ASML", "title": "ASML"},
+                    {"proName": "NYSE:NVO", "title": "Novo Nordisk"}
                 ],
                 "showSymbolLogo": true, "colorTheme": "dark", "isTransparent": true, "displayMode": "adaptive", "locale": "es"
             }
@@ -43,195 +135,275 @@
         </div>
     </div>
 
-    <nav class="sticky top-0 z-50 glass border-b border-slate-800 px-8 h-20 flex items-center justify-between">
-        <div class="flex items-center gap-12">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <i class="fa-solid fa-bolt-lightning text-white text-sm"></i>
-                </div>
-                <span class="text-xl font-black tracking-tighter uppercase italic">Financial <span class="text-blue-500 font-light">Core</span></span>
-            </div>
-            <div class="hidden lg:flex gap-8 uppercase text-[11px] font-bold tracking-[0.2em]">
-                <button onclick="showPage('pizarra')" id="btn-pizarra" class="nav-btn active">Pizarra</button>
-                <button onclick="showPage('mercado')" id="btn-mercado" class="nav-btn">Mercado</button>
-                <button onclick="showPage('screener')" id="btn-screener" class="nav-btn">Screener</button>
-                <button onclick="showPage('estadisticas')" id="btn-estadisticas" class="nav-btn">Estadísticas</button>
-                <button onclick="showPage('global')" id="btn-global" class="nav-btn">Global</button>
-            </div>
-        </div>
-        <div class="flex items-center gap-6">
-            <div class="text-right hidden sm:block">
-                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Estado Terminal</p>
-                <p class="text-[11px] text-emerald-400 font-mono">LIVE_TRADING_ACTIVE</p>
-            </div>
-            <button class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase px-6 py-3 rounded-full transition-all shadow-lg shadow-blue-600/20">
-                Acceso Usuario
-            </button>
-        </div>
-    </nav>
-
-    <main id="main-content" class="max-w-[1600px] mx-auto p-8">
+    <main class="max-w-[1700px] mx-auto p-6 lg:p-10 min-h-[calc(100vh-120px)]">
         
-        <div id="page-pizarra" class="page-fade space-y-8">
-            <div class="flex justify-between items-end">
-                <div>
-                    <h2 class="text-4xl font-black tracking-tight text-white">Dashboard <span class="text-blue-500 italic">General</span></h2>
-                    <p class="text-slate-500 mt-2">Visión holística de MyInvestor, Mexem y Bitvavo.</p>
-                </div>
-                <div class="glass p-4 rounded-2xl flex gap-8">
-                    <div class="text-center"><p class="text-[10px] text-slate-500 uppercase font-bold">Patrimonio</p><p class="text-xl font-bold">15.000€</p></div>
-                    <div class="text-center"><p class="text-[10px] text-slate-500 uppercase font-bold">Ahorro Mes</p><p class="text-xl font-bold text-blue-500">+600€</p></div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div class="md:col-span-3 glass rounded-[32px] p-2 h-[500px] relative overflow-hidden">
-                    <iframe src="https://s.tradingview.com/widgetembed/?symbol=NASDAQ:MSFT&interval=D&theme=dark" width="100%" height="100%" frameborder="0"></iframe>
-                </div>
-                <div class="space-y-6">
-                    <div class="glass rounded-3xl p-6 space-y-4">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Activos Alpha</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                                <span>Microsoft</span><span class="text-emerald-400 font-mono text-xs">+1.2%</span>
+        <section id="view-dashboard" class="view-content space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div class="grid grid-cols-1 xl:grid-cols-4 gap-8">
+                <div class="xl:col-span-1 space-y-6">
+                    <div class="glass-panel p-8 space-y-6">
+                        <p class="text-[10px] font-black text-slate-500 tracking-[0.4em] uppercase">Estatus de Cartera</p>
+                        <div class="space-y-1">
+                            <h3 class="text-4xl font-extrabold tracking-tighter italic">15.000,00<span class="text-blue-500 text-xl font-light not-italic ml-1">€</span></h3>
+                            <p class="text-emerald-500 text-xs font-bold font-mono">+1.240,50€ (Este mes)</p>
+                        </div>
+                        <div class="pt-4 border-t border-white/5 flex gap-4">
+                            <div class="flex-1">
+                                <p class="text-[9px] text-slate-500 font-bold uppercase">Ahorro DCA</p>
+                                <p class="text-lg font-bold">600€</p>
                             </div>
-                            <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                                <span>ASML</span><span class="text-red-400 font-mono text-xs">-0.4%</span>
+                            <div class="flex-1 border-l border-white/5 pl-4">
+                                <p class="text-[9px] text-slate-500 font-bold uppercase">Rent. Media</p>
+                                <p class="text-lg font-bold text-blue-400">8.5%</p>
                             </div>
                         </div>
                     </div>
-                    <div class="glass rounded-3xl p-6 bg-gradient-to-br from-blue-600/10 to-transparent">
-                        <h3 class="text-xs font-bold text-blue-400 uppercase tracking-widest mb-4">Estrategia Core</h3>
-                        <p class="text-sm text-slate-300 italic">"Mantener el 60% en MSCI World (MyInvestor) para reducir volatilidad global."</p>
+
+                    <div class="glass-panel p-6">
+                        <h4 class="text-[10px] font-black text-slate-500 tracking-widest mb-6 uppercase">Asset Allocation</h4>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold">MyInvestor (Core)</span>
+                                <span class="text-xs font-mono text-slate-400">60%</span>
+                            </div>
+                            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-blue-500 h-full w-[60%] shadow-[0_0_10px_#3b82f6]"></div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold">Mexem (Alpha)</span>
+                                <span class="text-xs font-mono text-slate-400">30%</span>
+                            </div>
+                            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-indigo-500 h-full w-[30%]"></div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold">Bitvavo (Crypto)</span>
+                                <span class="text-xs font-mono text-slate-400">10%</span>
+                            </div>
+                            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-orange-500 h-full w-[10%]"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-3 glass-panel p-2 min-h-[600px] overflow-hidden">
+                    <div class="tradingview-widget-container h-full w-full">
+                        <div id="tradingview_main" class="h-full w-full"></div>
+                        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                        <script type="text/javascript">
+                            new TradingView.widget({
+                                "autosize": true,
+                                "symbol": "NASDAQ:MSFT",
+                                "interval": "D",
+                                "timezone": "Etc/UTC",
+                                "theme": "dark",
+                                "style": "3",
+                                "locale": "es",
+                                "toolbar_bg": "#f1f3f6",
+                                "enable_publishing": false,
+                                "hide_top_toolbar": true,
+                                "save_image": false,
+                                "container_id": "tradingview_main"
+                            });
+                        </script>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div id="page-mercado" class="page-fade hidden space-y-8">
-            <h2 class="text-3xl font-bold uppercase tracking-tighter">Monitor de <span class="text-blue-500">Mercados Mundiales</span></h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 h-[700px]">
-                <div class="glass rounded-3xl overflow-hidden p-1"><iframe src="https://s.tradingview.com/widgetembed/?symbol=INDEX:IBEX&theme=dark" width="100%" height="100%" frameborder="0"></iframe></div>
-                <div class="glass rounded-3xl overflow-hidden p-1"><iframe src="https://s.tradingview.com/widgetembed/?symbol=BITSTAMP:BTCUSD&theme=dark" width="100%" height="100%" frameborder="0"></iframe></div>
-                <div class="glass rounded-3xl overflow-hidden p-1"><iframe src="https://s.tradingview.com/widgetembed/?symbol=NASDAQ:AAPL&theme=dark" width="100%" height="100%" frameborder="0"></iframe></div>
-            </div>
-        </div>
-
-        <div id="page-screener" class="page-fade hidden space-y-8">
-            <div class="flex justify-between items-center">
-                <h2 class="text-3xl font-bold uppercase tracking-tighter">Terminal de <span class="text-blue-500">Datos Vivos</span></h2>
+        <section id="view-screener" class="view-content hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div class="flex flex-col md:flex-row justify-between items-end gap-6 mb-10">
+                <div>
+                    <h2 class="text-5xl font-black tracking-tighter uppercase italic">Screener <span class="text-blue-500">Global</span></h2>
+                    <p class="text-slate-500 mt-2 font-mono text-xs">Sincronizado con Google Finance y Engine de IA.</p>
+                </div>
                 <div class="flex gap-4">
-                    <input type="text" id="filterInput" placeholder="Filtrar por nombre..." class="bg-slate-900 border border-slate-800 rounded-xl px-6 py-2 text-sm focus:border-blue-500 outline-none w-80">
-                    <button onclick="loadSheets()" class="bg-slate-800 hover:bg-slate-700 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest">Actualizar CSV</button>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                        <input type="text" id="screenerSearch" onkeyup="filterTable()" placeholder="BUSCAR ACTIVO O TICKER..." class="bg-slate-900 border border-white/5 rounded-2xl px-12 py-3 text-[11px] font-bold tracking-widest outline-none focus:border-blue-500 transition-all w-80 uppercase">
+                    </div>
+                    <button onclick="fetchSheetData()" class="bg-blue-600/10 border border-blue-500/20 text-blue-400 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition">Actualizar DB</button>
                 </div>
             </div>
-            
-            <div class="glass rounded-[40px] overflow-hidden border border-slate-800">
-                <table class="w-full text-left">
-                    <thead class="bg-slate-900/50 text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] border-b border-slate-800">
-                        <tr>
-                            <th class="px-8 py-6">Categoría</th>
-                            <th class="px-8 py-6">Activo</th>
-                            <th class="px-8 py-6">Ticker</th>
-                            <th class="px-8 py-6 text-right">Precio Actual</th>
-                            <th class="px-8 py-6 text-right">Variación %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="sheet-body" class="text-sm divide-y divide-slate-800/50">
-                        </tbody>
-                </table>
-            </div>
-        </div>
 
-        <div id="page-estadisticas" class="page-fade hidden h-[85vh] flex flex-col gap-6">
-            <h2 class="text-3xl font-bold uppercase tracking-tighter">Análisis <span class="text-blue-500">Cuantitativo</span></h2>
-            <div class="flex-grow glass rounded-[40px] overflow-hidden">
+            <div class="glass-panel overflow-hidden border border-white/5 shadow-2xl">
+                <div class="max-h-[700px] overflow-y-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse" id="screenerTable">
+                        <thead class="sticky top-0 bg-[#0f172a] z-10">
+                            <tr class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-white/5">
+                                <th class="px-8 py-6">Estrategia</th>
+                                <th class="px-8 py-6">Activo / Empresa</th>
+                                <th class="px-8 py-6">Ticker ID</th>
+                                <th class="px-8 py-6 text-right">Cotización</th>
+                                <th class="px-8 py-6 text-right">Variación 24h</th>
+                                <th class="px-8 py-6 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sheet-data-output" class="text-sm divide-y divide-white/5">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-analisis" class="view-content hidden h-[80vh] animate-in fade-in duration-700">
+             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+                <div class="glass-panel p-1 overflow-hidden">
+                    <iframe src="https://s.tradingview.com/widgetembed/?symbol=NASDAQ:ASML&interval=D&theme=dark" class="w-full h-full border-0"></iframe>
+                </div>
+                <div class="glass-panel p-1 overflow-hidden">
+                    <iframe src="https://s.tradingview.com/widgetembed/?symbol=BME:ITX&interval=D&theme=dark" class="w-full h-full border-0"></iframe>
+                </div>
+             </div>
+        </section>
+
+        <section id="view-patrimonio" class="view-content hidden animate-in fade-in duration-700 space-y-8">
+            <div class="glass-panel p-1 h-[85vh] overflow-hidden relative">
+                <div class="absolute top-6 left-6 z-10 bg-blue-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg">DATA_VISUALIZATION_ACTIVE</div>
                 <iframe src="https://lookerstudio.google.com/embed/reporting/363f8d67-463d-460d-8868-b7654b039401/page/p_h1r1f1c1" class="w-full h-full border-0"></iframe>
             </div>
-        </div>
-
-        <div id="page-global" class="page-fade hidden space-y-12">
-            <div class="max-w-4xl mx-auto text-center space-y-6">
-                <h2 class="text-6xl font-black uppercase tracking-tighter">Gestión <span class="text-blue-500 italic">Patrimonial</span></h2>
-                <p class="text-slate-400 text-lg">Control de liquidez, fondos indexados y exposición cripto.</p>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
-                <div class="glass p-10 rounded-[50px] space-y-6">
-                    <p class="text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Objetivo 2026</p>
-                    <div class="text-7xl font-black text-center tracking-tighter">15.000€</div>
-                    <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
-                        <div class="bg-blue-600 h-full w-[45%] shadow-[0_0_20px_#3b82f6]"></div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 gap-4">
-                    <div class="glass p-8 rounded-3xl flex justify-between items-center">
-                        <div><p class="text-[10px] text-slate-500 uppercase font-bold">Aportación DCA</p><p class="text-2xl font-bold">600€ / Mes</p></div>
-                        <i class="fa-solid fa-arrow-up-right-dots text-blue-500 text-2xl"></i>
-                    </div>
-                    <div class="glass p-8 rounded-3xl flex justify-between items-center">
-                        <div><p class="text-[10px] text-slate-500 uppercase font-bold">Plataforma Principal</p><p class="text-2xl font-bold text-blue-400 font-mono italic">MYINVESTOR</p></div>
-                        <i class="fa-solid fa-shield-halved text-blue-500 text-2xl"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+        </section>
 
     </main>
 
+    <footer class="border-t border-white/5 bg-slate-950/50 py-8 px-10">
+        <div class="max-w-[1700px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-4">
+                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Powered by</span>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/TradingView_logo.svg" class="h-4 opacity-30 grayscale hover:grayscale-0 transition" alt="TradingView">
+            </div>
+            <p class="text-[10px] font-medium text-slate-500 uppercase tracking-widest">&copy; 2026 FINANCIAL CORE TERMINAL | SISTEMA DE ALTA FRECUENCIA</p>
+        </div>
+    </footer>
+
     <script>
-        // --- CONFIGURACIÓN DE TU EXCEL ---
-        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT17B_R8r22vD8fG0E6wY7f6-G4_TU_ID_AQUÍ/pub?output=csv';
+        // --- 1. CONFIGURACIÓN DEL SISTEMA ---
+        // Pega aquí la URL de tu Google Sheets publicado como CSV
+        const GOOGLE_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT17B_R8r22vD8fG0E6wY7f6-G4_TU_ID_AQUÍ/pub?output=csv';
 
-        // Función para cambiar de página
-        function showPage(id) {
-            // Ocultar todas las páginas
-            document.querySelectorAll('.page-fade').forEach(p => p.classList.add('hidden'));
-            // Quitar clase activa de botones
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        // --- 2. GESTIÓN DE NAVEGACIÓN (SPA) ---
+        function navigate(viewId) {
+            // Desactivar todas las vistas
+            document.querySelectorAll('.view-content').forEach(view => {
+                view.classList.add('hidden');
+            });
+            // Mostrar vista seleccionada
+            document.getElementById('view-' + viewId).classList.remove('hidden');
             
-            // Mostrar página actual
-            document.getElementById('page-' + id).classList.remove('hidden');
-            document.getElementById('btn-' + id).classList.add('active');
+            // Actualizar navegación visual
+            document.querySelectorAll('.nav-item').forEach(nav => {
+                nav.classList.remove('active');
+            });
+            document.getElementById('nav-' + viewId).classList.add('active');
 
-            if(id === 'screener') loadSheets();
+            // Cargar datos si es screener
+            if(viewId === 'screener') fetchSheetData();
+            
+            // Efecto scroll al inicio
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Cargador dinámico de Google Sheets
-        async function loadSheets() {
-            const tbody = document.getElementById('sheet-body');
-            tbody.innerHTML = '<tr><td colspan="5" class="p-20 text-center animate-pulse text-slate-500 uppercase font-bold tracking-[0.5em]">Sincronizando con Google Finance...</td></tr>';
+        // --- 3. CONEXIÓN CON DATA ENGINE (GOOGLE SHEETS) ---
+        async function fetchSheetData() {
+            const tableBody = document.getElementById('sheet-data-output');
+            const updateLabel = document.getElementById('last-update');
             
+            tableBody.innerHTML = `<tr><td colspan="6" class="p-20 text-center"><i class="fa-solid fa-circle-notch animate-spin text-blue-500 text-2xl mb-4"></i><p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Analizando registros en la nube...</p></td></tr>`;
+
             try {
-                const response = await fetch(SHEET_CSV_URL);
+                const response = await fetch(GOOGLE_SHEET_CSV);
                 const data = await response.text();
-                const rows = data.split('\n').slice(1);
-                
-                let html = '';
-                rows.forEach(row => {
-                    const cols = row.split(',');
-                    if(cols.length >= 5) {
-                        const isNegative = cols[4].includes('-');
-                        html += `
-                        <tr class="hover:bg-slate-900/40 transition-all group">
-                            <td class="px-8 py-5 text-slate-500 font-bold uppercase text-[10px] tracking-widest">${cols[0]}</td>
-                            <td class="px-8 py-5 font-bold text-white group-hover:text-blue-400 transition-colors">${cols[1]}</td>
-                            <td class="px-8 py-5 font-mono text-xs text-slate-600">${cols[2]}</td>
-                            <td class="px-8 py-5 text-right font-black text-slate-200 font-mono">${cols[3]}</td>
-                            <td class="px-8 py-5 text-right font-black font-mono ${isNegative ? 'text-red-500' : 'text-emerald-400'}">
-                                ${cols[4]}
-                            </td>
-                        </tr>`;
+                const rows = data.split('\n').slice(1); // Saltamos la cabecera del Excel
+
+                let htmlContent = '';
+
+                rows.forEach((row, index) => {
+                    const columns = row.split(',');
+                    if(columns.length >= 5) {
+                        const categoria = columns[0] || 'N/A';
+                        const nombre = columns[1] || '---';
+                        const ticker = columns[2] || '---';
+                        const precio = columns[3] || '0.00';
+                        const cambio = columns[4] || '0%';
+                        
+                        const isNegative = cambio.includes('-');
+                        const badgeColor = isNegative ? 'text-red-500 bg-red-500/10' : 'text-emerald-500 bg-emerald-500/10';
+
+                        htmlContent += `
+                            <tr class="row-hover group transition-all duration-300">
+                                <td class="px-8 py-5">
+                                    <span class="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-slate-800 text-slate-400 border border-white/5">${categoria}</span>
+                                </td>
+                                <td class="px-8 py-5">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs uppercase">${nombre.charAt(0)}</div>
+                                        <p class="font-bold text-white group-hover:text-blue-400 transition-colors uppercase tracking-tight">${nombre}</p>
+                                    </div>
+                                </td>
+                                <td class="px-8 py-5 font-mono text-xs text-slate-500 font-medium tracking-tighter">${ticker}</td>
+                                <td class="px-8 py-5 text-right font-black text-white font-mono text-base tracking-tighter italic">${precio}€</td>
+                                <td class="px-8 py-5 text-right">
+                                    <span class="px-3 py-1.5 rounded-lg font-black font-mono text-[11px] ${badgeColor} inline-block min-w-[70px]">
+                                        ${isNegative ? '' : '+'}${cambio}
+                                    </td>
+                                    <td class="px-8 py-5 text-center">
+                                        <button class="w-8 h-8 rounded-lg bg-white/5 hover:bg-blue-600 transition flex items-center justify-center">
+                                            <i class="fa-solid fa-plus text-[10px] text-slate-400 hover:text-white"></i>
+                                        </button>
+                                    </td>
+                            </tr>
+                        `;
                     }
                 });
-                tbody.innerHTML = html;
-            } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="5" class="p-20 text-center text-red-500 uppercase font-bold">Error de conexión. Verifica la URL del CSV en Google Sheets.</td></tr>';
+
+                tableBody.innerHTML = htmlContent || `<tr><td colspan="6" class="p-20 text-center uppercase text-xs font-bold text-slate-500">No se encontraron activos activos.</td></tr>`;
+                
+                // Actualizar hora de sincronización
+                const now = new Date();
+                updateLabel.innerText = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0') + ' GMT+1';
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                tableBody.innerHTML = `<tr><td colspan="6" class="p-20 text-center text-red-500 font-bold uppercase text-[10px] tracking-widest">Error de Sincronización. Revisa la URL del CSV.</td></tr>`;
             }
         }
 
-        // Iniciar en Pizarra
-        showPage('pizarra');
+        // --- 4. SISTEMA DE FILTRADO ---
+        function filterTable() {
+            const input = document.getElementById('screenerSearch');
+            const filter = input.value.toUpperCase();
+            const table = document.getElementById('screenerTable');
+            const tr = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < tr.length; i++) {
+                const tdName = tr[i].getElementsByTagName('td')[1];
+                const tdTicker = tr[i].getElementsByTagName('td')[2];
+                if (tdName || tdTicker) {
+                    const txtValueName = tdName.textContent || tdName.innerText;
+                    const txtValueTicker = tdTicker.textContent || tdTicker.innerText;
+                    if (txtValueName.toUpperCase().indexOf(filter) > -1 || txtValueTicker.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        // --- 5. UTILIDADES ADICIONALES ---
+        function refreshAll() {
+            const btn = document.querySelector('.fa-rotate');
+            btn.classList.add('animate-spin');
+            fetchSheetData();
+            setTimeout(() => {
+                btn.classList.remove('animate-spin');
+            }, 1000);
+        }
+
+        // Inicializar Dashboard
+        window.onload = () => {
+            navigate('dashboard');
+        }
     </script>
 </body>
 </html>
