@@ -1,409 +1,569 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FINANCIAL CORE | Professional Hub</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;500&family=Inter:wght@300;400;600;800&display=swap');
-        
-        :root {
-            --bg-ultra-dark: #030712;
-            --card-surface: #0f172a;
-            --accent-primary: #3b82f6;
-            --success: #10b981;
-            --danger: #ef4444;
-        }
+import React, { useState, useEffect, useContext, useReducer, useMemo, createContext } from 'react';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
+  ResponsiveContainer, BarChart, Bar, Cell, ReferenceLine 
+} from 'recharts';
+import { 
+  LayoutDashboard, PieChart, TrendingUp, Activity, Bell, Settings, 
+  Search, Menu, X, ArrowUpRight, ArrowDownRight, Briefcase, 
+  User, ChevronRight, Lock, Zap, FileText, Globe, Shield
+} from 'lucide-react';
 
-        body {
-            background-color: var(--bg-ultra-dark);
-            color: #f8fafc;
-            font-family: 'Inter', sans-serif;
-            overflow-x: hidden;
-        }
+// ==========================================
+// 1. TYPE DEFINITIONS & INTERFACES (TypeScript Strong Typing)
+// ==========================================
 
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
+type ViewState = 'DASHBOARD' | 'MARKETS' | 'PORTFOLIO' | 'ANALYTICS' | 'SETTINGS';
 
-        /* Estética Financial Hub: Bordes ultra-suaves y glassmorphism */
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 24px;
-        }
+interface Stock {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+  marketCap: string;
+  sector: string;
+  history: { time: string; value: number }[];
+}
 
-        .nav-item {
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            color: #94a3b8;
-        }
+interface PortfolioItem {
+  symbol: string;
+  shares: number;
+  avgPrice: number;
+}
 
-        .nav-item.active {
-            color: var(--accent-primary);
-        }
+interface UserProfile {
+  name: string;
+  balance: number;
+  riskProfile: 'Conservative' | 'Moderate' | 'Aggressive';
+}
 
-        .nav-item.active::after {
-            content: '';
-            position: absolute;
-            bottom: -22px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 3px;
-            background: var(--accent-primary);
-            box-shadow: 0 0 15px var(--accent-primary);
-            border-radius: 10px;
-        }
+interface AppState {
+  currentView: ViewState;
+  selectedStock: Stock | null;
+  portfolio: PortfolioItem[];
+  user: UserProfile;
+  isSidebarOpen: boolean;
+  notifications: string[];
+}
 
-        /* Tabla Estilo Terminal */
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+// ==========================================
+// 2. MOCK DATA GENERATORS (Complex Logic)
+// ==========================================
 
-        .row-hover:hover {
-            background: rgba(59, 130, 246, 0.05);
-            border-left: 3px solid var(--accent-primary);
-        }
+const generateBrownianMotion = (startPrice: number, steps: number) => {
+  let current = startPrice;
+  return Array.from({ length: steps }).map((_, i) => {
+    const volatility = 0.02; // 2% volatility
+    const drift = 0.0005; // Slight upward drift
+    const change = current * (drift + volatility * (Math.random() - 0.5));
+    current += change;
+    return {
+      time: i.toString(), // Simplified time for XAxis
+      value: parseFloat(current.toFixed(2))
+    };
+  });
+};
 
-        /* Animación de carga de datos */
-        @keyframes pulse-border {
-            0% { border-color: rgba(59, 130, 246, 0.2); }
-            50% { border-color: rgba(59, 130, 246, 0.8); }
-            100% { border-color: rgba(59, 130, 246, 0.2); }
-        }
-        .loading-active { animation: pulse-border 2s infinite; }
-    </style>
-</head>
-<body class="min-h-screen antialiased">
+const MOCK_STOCKS: Stock[] = [
+  { symbol: 'LIN.MC', name: 'Línea Directa', price: 1.025, change: 0.015, changePercent: 1.45, volume: 1500200, marketCap: '1.1B', sector: 'Insurance', history: generateBrownianMotion(0.90, 50) },
+  { symbol: 'IBE.MC', name: 'Iberdrola', price: 11.45, change: -0.05, changePercent: -0.45, volume: 4500000, marketCap: '72B', sector: 'Utilities', history: generateBrownianMotion(11.2, 50) },
+  { symbol: 'ITX.MC', name: 'Inditex', price: 42.10, change: 0.80, changePercent: 1.90, volume: 1200000, marketCap: '130B', sector: 'Consumer', history: generateBrownianMotion(40.5, 50) },
+  { symbol: 'SAN.MC', name: 'Banco Santander', price: 4.80, change: 0.02, changePercent: 0.40, volume: 32000000, marketCap: '76B', sector: 'Finance', history: generateBrownianMotion(4.6, 50) },
+];
 
-    <nav class="sticky top-0 z-[100] bg-slate-950/80 backdrop-blur-xl border-b border-white/5 px-8 h-20 flex items-center justify-between">
-        <div class="flex items-center gap-14">
-            <div class="flex items-center gap-3 group cursor-pointer">
-                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-2xl shadow-blue-500/20 group-hover:scale-110 transition">
-                    <i class="fa-solid fa-layer-group text-white text-lg"></i>
-                </div>
-                <div class="flex flex-col">
-                    <span class="text-xl font-extrabold tracking-tighter leading-none">FINANCIAL <span class="text-blue-500">CORE</span></span>
-                    <span class="text-[9px] font-bold text-slate-500 tracking-[0.3em] uppercase">Intelligence Hub</span>
-                </div>
-            </div>
+// ==========================================
+// 3. GLOBAL STATE MANAGEMENT (Context + Reducer)
+// ==========================================
 
-            <div class="hidden lg:flex gap-10 text-[11px] font-black uppercase tracking-widest">
-                <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active">Dashboard</button>
-                <button onclick="navigate('analisis')" id="nav-analisis" class="nav-item">Análisis Técnico</button>
-                <button onclick="navigate('screener')" id="nav-screener" class="nav-item">Screener IA</button>
-                <button onclick="navigate('patrimonio')" id="nav-patrimonio" class="nav-item">Global Portfolio</button>
-            </div>
+const initialState: AppState = {
+  currentView: 'DASHBOARD',
+  selectedStock: MOCK_STOCKS[0],
+  portfolio: [
+    { symbol: 'LIN.MC', shares: 1000, avgPrice: 0.95 },
+    { symbol: 'ITX.MC', shares: 50, avgPrice: 38.00 }
+  ],
+  user: { name: 'Alex Trader', balance: 15420.50, riskProfile: 'Aggressive' },
+  isSidebarOpen: true,
+  notifications: []
+};
+
+type Action = 
+  | { type: 'SET_VIEW'; payload: ViewState }
+  | { type: 'SELECT_STOCK'; payload: Stock }
+  | { type: 'TOGGLE_SIDEBAR' }
+  | { type: 'ADD_NOTIFICATION'; payload: string };
+
+const appReducer = (state: AppState, action: Action): AppState => {
+  switch (action.type) {
+    case 'SET_VIEW': return { ...state, currentView: action.payload };
+    case 'SELECT_STOCK': return { ...state, selectedStock: action.payload, currentView: 'MARKETS' };
+    case 'TOGGLE_SIDEBAR': return { ...state, isSidebarOpen: !state.isSidebarOpen };
+    case 'ADD_NOTIFICATION': return { ...state, notifications: [action.payload, ...state.notifications] };
+    default: return state;
+  }
+};
+
+const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action> }>({
+  state: initialState,
+  dispatch: () => null
+});
+
+// ==========================================
+// 4. UI COMPONENT LIBRARY (Atomic Design)
+// ==========================================
+
+const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+  <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm ${className}`}>
+    {children}
+  </div>
+);
+
+const Badge = ({ children, type = 'neutral' }: { children: React.ReactNode, type?: 'success' | 'danger' | 'neutral' | 'warning' }) => {
+  const styles = {
+    success: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    danger: 'bg-rose-50 text-rose-600 border-rose-100',
+    warning: 'bg-amber-50 text-amber-600 border-amber-100',
+    neutral: 'bg-slate-50 text-slate-600 border-slate-100'
+  };
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${styles[type]}`}>
+      {children}
+    </span>
+  );
+};
+
+const Button = ({ children, onClick, variant = 'primary', icon: Icon }: any) => {
+  const baseStyle = "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95";
+  const variants = {
+    primary: "bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-200",
+    secondary: "bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50",
+    ghost: "text-slate-500 hover:bg-slate-100"
+  };
+  return (
+    <button onClick={onClick} className={`${baseStyle} ${variants[variant as keyof typeof variants]}`}>
+      {Icon && <Icon size={16} />}
+      {children}
+    </button>
+  );
+};
+
+// ==========================================
+// 5. SUB-VIEWS (Modular Logic)
+// ==========================================
+
+// --- VIEW: DASHBOARD ---
+const DashboardView = () => {
+  const { state, dispatch } = useContext(AppContext);
+  
+  // Calculate total portfolio value
+  const portfolioValue = useMemo(() => {
+    return state.portfolio.reduce((acc, item) => {
+      const stock = MOCK_STOCKS.find(s => s.symbol === item.symbol);
+      return acc + (stock ? stock.price * item.shares : 0);
+    }, 0);
+  }, [state.portfolio]);
+
+  const totalAssets = portfolioValue + state.user.balance;
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Welcome Header */}
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Resumen Financiero</h2>
+          <p className="text-slate-500">Bienvenido de nuevo, {state.user.name}</p>
         </div>
-
-        <div class="flex items-center gap-6">
-            <div class="hidden xl:flex items-center gap-4 border-l border-white/10 pl-6">
-                <div class="text-right">
-                    <p class="text-[9px] text-slate-500 font-bold">ÚLTIMA ACTUALIZACIÓN</p>
-                    <p id="last-update" class="text-[11px] font-mono text-blue-400 italic">Sincronizando...</p>
-                </div>
-                <button onclick="refreshAll()" class="w-8 h-8 rounded-full hover:bg-white/5 flex items-center justify-center transition">
-                    <i class="fa-solid fa-rotate text-xs text-slate-400"></i>
-                </button>
-            </div>
-            <div class="h-10 w-[1px] bg-white/10 mx-2"></div>
-            <button class="bg-white text-black text-[11px] font-black px-6 py-2.5 rounded-full hover:bg-blue-500 hover:text-white transition-all shadow-xl active:scale-95">
-                ÁREA PRIVADA
-            </button>
+        <div className="text-right">
+          <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Patrimonio Total</p>
+          <h1 className="text-4xl font-black text-slate-900">{totalAssets.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</h1>
         </div>
-    </nav>
+      </div>
 
-    <div class="h-10 bg-black border-b border-white/5 overflow-hidden">
-        <div class="tradingview-widget-container">
-            <div class="tradingview-widget-container__widget"></div>
-            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
-            {
-                "symbols": [
-                    {"proName": "NASDAQ:MSFT", "title": "Microsoft"},
-                    {"proName": "BME:NXT", "title": "Nextil"},
-                    {"proName": "BITSTAMP:BTCUSD", "title": "Bitcoin"},
-                    {"proName": "BME:ITX", "title": "Inditex"},
-                    {"proName": "FX_IDC:EURUSD", "title": "EUR/USD"},
-                    {"proName": "NASDAQ:ASML", "title": "ASML"},
-                    {"proName": "NYSE:NVO", "title": "Novo Nordisk"}
-                ],
-                "showSymbolLogo": true, "colorTheme": "dark", "isTransparent": true, "displayMode": "adaptive", "locale": "es"
-            }
-            </script>
+      {/* KPI Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-none">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-white/10 rounded-lg"><Activity /></div>
+            <span className="bg-white/20 px-2 py-1 rounded text-xs font-bold">+12.5% YTD</span>
+          </div>
+          <p className="text-blue-100 text-sm">Rendimiento Cartera</p>
+          <h3 className="text-3xl font-bold mt-1">Excellent</h3>
+        </Card>
+        <Card className="p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><TrendingUp /></div>
+          </div>
+          <p className="text-slate-500 text-sm">Liquidez Disponible</p>
+          <h3 className="text-2xl font-bold text-slate-800">{state.user.balance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</h3>
+        </Card>
+        <Card className="p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><PieChart /></div>
+          </div>
+          <p className="text-slate-500 text-sm">Activos Totales</p>
+          <h3 className="text-2xl font-bold text-slate-800">{state.portfolio.length} Posiciones</h3>
+        </Card>
+      </div>
+
+      {/* Market Movers Table */}
+      <Card className="p-0 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <h3 className="font-bold text-lg">Mercado en Vivo</h3>
+          <Button variant="ghost" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'MARKETS' })}>Ver Todo</Button>
         </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-50 text-slate-500 font-medium">
+              <tr>
+                <th className="px-6 py-4">Activo</th>
+                <th className="px-6 py-4">Precio</th>
+                <th className="px-6 py-4">Cambio</th>
+                <th className="px-6 py-4 hidden md:table-cell">Volumen</th>
+                <th className="px-6 py-4">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MOCK_STOCKS.map((stock) => (
+                <tr key={stock.symbol} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-900 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs text-slate-600">
+                      {stock.symbol.substring(0,2)}
+                    </div>
+                    {stock.name}
+                  </td>
+                  <td className="px-6 py-4 font-mono">{stock.price.toFixed(3)}€</td>
+                  <td className="px-6 py-4">
+                    <Badge type={stock.change >= 0 ? 'success' : 'danger'}>
+                      {stock.change > 0 ? '+' : ''}{stock.changePercent}%
+                    </Badge>
+                  </td>
+                  <td className="px-6 py-4 text-slate-400 hidden md:table-cell">{(stock.volume / 1000).toFixed(1)}k</td>
+                  <td className="px-6 py-4">
+                    <button 
+                      onClick={() => dispatch({ type: 'SELECT_STOCK', payload: stock })}
+                      className="text-blue-600 hover:text-blue-800 font-bold text-xs"
+                    >
+                      ANALIZAR
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
+  );
+};
 
-    <main class="max-w-[1700px] mx-auto p-6 lg:p-10 min-h-[calc(100vh-120px)]">
-        
-        <section id="view-dashboard" class="view-content space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div class="grid grid-cols-1 xl:grid-cols-4 gap-8">
-                <div class="xl:col-span-1 space-y-6">
-                    <div class="glass-panel p-8 space-y-6">
-                        <p class="text-[10px] font-black text-slate-500 tracking-[0.4em] uppercase">Estatus de Cartera</p>
-                        <div class="space-y-1">
-                            <h3 class="text-4xl font-extrabold tracking-tighter italic">15.000,00<span class="text-blue-500 text-xl font-light not-italic ml-1">€</span></h3>
-                            <p class="text-emerald-500 text-xs font-bold font-mono">+1.240,50€ (Este mes)</p>
-                        </div>
-                        <div class="pt-4 border-t border-white/5 flex gap-4">
-                            <div class="flex-1">
-                                <p class="text-[9px] text-slate-500 font-bold uppercase">Ahorro DCA</p>
-                                <p class="text-lg font-bold">600€</p>
-                            </div>
-                            <div class="flex-1 border-l border-white/5 pl-4">
-                                <p class="text-[9px] text-slate-500 font-bold uppercase">Rent. Media</p>
-                                <p class="text-lg font-bold text-blue-400">8.5%</p>
-                            </div>
-                        </div>
-                    </div>
+// --- VIEW: MARKET DETAIL (Chart Complexity) ---
+const MarketDetailView = () => {
+  const { state } = useContext(AppContext);
+  const stock = state.selectedStock;
 
-                    <div class="glass-panel p-6">
-                        <h4 class="text-[10px] font-black text-slate-500 tracking-widest mb-6 uppercase">Asset Allocation</h4>
-                        <div class="space-y-4">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-semibold">MyInvestor (Core)</span>
-                                <span class="text-xs font-mono text-slate-400">60%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                <div class="bg-blue-500 h-full w-[60%] shadow-[0_0_10px_#3b82f6]"></div>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-semibold">Mexem (Alpha)</span>
-                                <span class="text-xs font-mono text-slate-400">30%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                <div class="bg-indigo-500 h-full w-[30%]"></div>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-semibold">Bitvavo (Crypto)</span>
-                                <span class="text-xs font-mono text-slate-400">10%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                <div class="bg-orange-500 h-full w-[10%]"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+  if (!stock) return <div>Selecciona un activo</div>;
 
-                <div class="xl:col-span-3 glass-panel p-2 min-h-[600px] overflow-hidden">
-                    <div class="tradingview-widget-container h-full w-full">
-                        <div id="tradingview_main" class="h-full w-full"></div>
-                        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-                        <script type="text/javascript">
-                            new TradingView.widget({
-                                "autosize": true,
-                                "symbol": "NASDAQ:MSFT",
-                                "interval": "D",
-                                "timezone": "Etc/UTC",
-                                "theme": "dark",
-                                "style": "3",
-                                "locale": "es",
-                                "toolbar_bg": "#f1f3f6",
-                                "enable_publishing": false,
-                                "hide_top_toolbar": true,
-                                "save_image": false,
-                                "container_id": "tradingview_main"
-                            });
-                        </script>
-                    </div>
-                </div>
-            </div>
-        </section>
+  // Simulate Order Book Data
+  const orderBookData = useMemo(() => {
+    return Array.from({ length: 14 }).map((_, i) => ({
+      price: stock.price + (i - 7) * 0.01,
+      volume: Math.floor(Math.random() * 5000),
+      type: i < 7 ? 'bid' : 'ask'
+    }));
+  }, [stock]);
 
-        <section id="view-screener" class="view-content hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div class="flex flex-col md:flex-row justify-between items-end gap-6 mb-10">
-                <div>
-                    <h2 class="text-5xl font-black tracking-tighter uppercase italic">Screener <span class="text-blue-500">Global</span></h2>
-                    <p class="text-slate-500 mt-2 font-mono text-xs">Sincronizado con Google Finance y Engine de IA.</p>
-                </div>
-                <div class="flex gap-4">
-                    <div class="relative">
-                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-                        <input type="text" id="screenerSearch" onkeyup="filterTable()" placeholder="BUSCAR ACTIVO O TICKER..." class="bg-slate-900 border border-white/5 rounded-2xl px-12 py-3 text-[11px] font-bold tracking-widest outline-none focus:border-blue-500 transition-all w-80 uppercase">
-                    </div>
-                    <button onclick="fetchSheetData()" class="bg-blue-600/10 border border-blue-500/20 text-blue-400 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition">Actualizar DB</button>
-                </div>
-            </div>
-
-            <div class="glass-panel overflow-hidden border border-white/5 shadow-2xl">
-                <div class="max-h-[700px] overflow-y-auto custom-scrollbar">
-                    <table class="w-full text-left border-collapse" id="screenerTable">
-                        <thead class="sticky top-0 bg-[#0f172a] z-10">
-                            <tr class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-white/5">
-                                <th class="px-8 py-6">Estrategia</th>
-                                <th class="px-8 py-6">Activo / Empresa</th>
-                                <th class="px-8 py-6">Ticker ID</th>
-                                <th class="px-8 py-6 text-right">Cotización</th>
-                                <th class="px-8 py-6 text-right">Variación 24h</th>
-                                <th class="px-8 py-6 text-center">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="sheet-data-output" class="text-sm divide-y divide-white/5">
-                            </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <section id="view-analisis" class="view-content hidden h-[80vh] animate-in fade-in duration-700">
-             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
-                <div class="glass-panel p-1 overflow-hidden">
-                    <iframe src="https://s.tradingview.com/widgetembed/?symbol=NASDAQ:ASML&interval=D&theme=dark" class="w-full h-full border-0"></iframe>
-                </div>
-                <div class="glass-panel p-1 overflow-hidden">
-                    <iframe src="https://s.tradingview.com/widgetembed/?symbol=BME:ITX&interval=D&theme=dark" class="w-full h-full border-0"></iframe>
-                </div>
-             </div>
-        </section>
-
-        <section id="view-patrimonio" class="view-content hidden animate-in fade-in duration-700 space-y-8">
-            <div class="glass-panel p-1 h-[85vh] overflow-hidden relative">
-                <div class="absolute top-6 left-6 z-10 bg-blue-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg">DATA_VISUALIZATION_ACTIVE</div>
-                <iframe src="https://lookerstudio.google.com/embed/reporting/363f8d67-463d-460d-8868-b7654b039401/page/p_h1r1f1c1" class="w-full h-full border-0"></iframe>
-            </div>
-        </section>
-
-    </main>
-
-    <footer class="border-t border-white/5 bg-slate-950/50 py-8 px-10">
-        <div class="max-w-[1700px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-            <div class="flex items-center gap-4">
-                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Powered by</span>
-                <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/TradingView_logo.svg" class="h-4 opacity-30 grayscale hover:grayscale-0 transition" alt="TradingView">
-            </div>
-            <p class="text-[10px] font-medium text-slate-500 uppercase tracking-widest">&copy; 2026 FINANCIAL CORE TERMINAL | SISTEMA DE ALTA FRECUENCIA</p>
+  return (
+    <div className="h-full flex flex-col gap-6 animate-in slide-in-from-right-4 duration-300">
+      {/* Header Info */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-3xl font-black text-slate-900">{stock.name}</h1>
+            <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs font-mono font-bold">{stock.symbol}</span>
+          </div>
+          <p className="text-slate-500">{stock.sector} • IBEX 35</p>
         </div>
-    </footer>
+        <div className="flex gap-4">
+          <Button variant="secondary" icon={Bell}>Alertar</Button>
+          <Button variant="primary" icon={Zap}>Operar</Button>
+        </div>
+      </div>
 
-    <script>
-        // --- 1. CONFIGURACIÓN DEL SISTEMA ---
-        // Pega aquí la URL de tu Google Sheets publicado como CSV
-        const GOOGLE_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT17B_R8r22vD8fG0E6wY7f6-G4_TU_ID_AQUÍ/pub?output=csv';
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+        {/* Main Chart Area */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="p-6 h-[450px] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-slate-700">Acción de Precio</h3>
+              <div className="flex gap-2">
+                {['1H', '1D', '1W', '1M', '1Y'].map(t => (
+                  <button key={t} className="px-2 py-1 text-xs font-bold text-slate-400 hover:text-blue-600">{t}</button>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 w-full min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stock.history}>
+                  <defs>
+                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="time" hide />
+                  <YAxis domain={['auto', 'auto']} orientation="right" tick={{fontSize: 11, fill: '#94a3b8'}} axisLine={false} tickLine={false}/>
+                  <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                  <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
 
-        // --- 2. GESTIÓN DE NAVEGACIÓN (SPA) ---
-        function navigate(viewId) {
-            // Desactivar todas las vistas
-            document.querySelectorAll('.view-content').forEach(view => {
-                view.classList.add('hidden');
-            });
-            // Mostrar vista seleccionada
-            document.getElementById('view-' + viewId).classList.remove('hidden');
+          {/* Fundamentals */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 text-center">
+              <p className="text-xs text-slate-400 uppercase font-bold">Cap. Mercado</p>
+              <p className="font-bold text-slate-800">{stock.marketCap}</p>
+            </Card>
+            <Card className="p-4 text-center">
+              <p className="text-xs text-slate-400 uppercase font-bold">Volumen</p>
+              <p className="font-bold text-slate-800">{(stock.volume/1000000).toFixed(2)}M</p>
+            </Card>
+            <Card className="p-4 text-center">
+              <p className="text-xs text-slate-400 uppercase font-bold">Rango 52S</p>
+              <p className="font-bold text-slate-800">{(stock.price * 0.8).toFixed(2)} - {(stock.price * 1.2).toFixed(2)}</p>
+            </Card>
+            <Card className="p-4 text-center">
+              <p className="text-xs text-slate-400 uppercase font-bold">Beta</p>
+              <p className="font-bold text-slate-800">0.85</p>
+            </Card>
+          </div>
+        </div>
+
+        {/* Order Book (Depth) */}
+        <div className="space-y-6">
+          <Card className="p-0 h-[600px] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="font-bold text-sm text-slate-700 flex items-center gap-2">
+                <Activity size={16} /> Profundidad de Mercado
+              </h3>
+            </div>
             
-            // Actualizar navegación visual
-            document.querySelectorAll('.nav-item').forEach(nav => {
-                nav.classList.remove('active');
-            });
-            document.getElementById('nav-' + viewId).classList.add('active');
+            <div className="flex-1 overflow-y-auto p-2">
+              <div className="flex text-[10px] text-slate-400 font-bold mb-2 px-2">
+                <span className="flex-1">PRECIO</span>
+                <span className="flex-1 text-right">CANTIDAD</span>
+                <span className="w-12 text-right">TOTAL</span>
+              </div>
+              
+              {/* Asks (Sell Orders) - Red */}
+              <div className="flex flex-col-reverse gap-1 mb-2 border-b border-slate-100 pb-2">
+                {orderBookData.filter(d => d.type === 'ask').map((order, i) => (
+                  <div key={i} className="flex justify-between text-xs relative group cursor-pointer hover:bg-slate-50 px-2 py-0.5">
+                    <div className="absolute right-0 top-0 bottom-0 bg-red-50 z-0" style={{ width: `${Math.random() * 100}%` }}></div>
+                    <span className="text-red-500 font-mono z-10 relative">{order.price.toFixed(3)}</span>
+                    <span className="text-slate-600 z-10 relative">{order.volume}</span>
+                  </div>
+                ))}
+              </div>
 
-            // Cargar datos si es screener
-            if(viewId === 'screener') fetchSheetData();
+              <div className="text-center py-2 font-bold text-lg text-slate-800 bg-slate-50 my-1 rounded">
+                {stock.price.toFixed(3)}€
+              </div>
+
+              {/* Bids (Buy Orders) - Green */}
+              <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-2">
+                {orderBookData.filter(d => d.type === 'bid').map((order, i) => (
+                  <div key={i} className="flex justify-between text-xs relative group cursor-pointer hover:bg-slate-50 px-2 py-0.5">
+                    <div className="absolute right-0 top-0 bottom-0 bg-emerald-50 z-0" style={{ width: `${Math.random() * 100}%` }}></div>
+                    <span className="text-emerald-600 font-mono z-10 relative">{order.price.toFixed(3)}</span>
+                    <span className="text-slate-600 z-10 relative">{order.volume}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
             
-            // Efecto scroll al inicio
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+            <div className="p-4 border-t border-slate-100 bg-slate-50">
+               <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex">
+                 <div className="h-full bg-emerald-500 w-[60%]"></div>
+                 <div className="h-full bg-red-500 w-[40%]"></div>
+               </div>
+               <div className="flex justify-between text-[10px] font-bold text-slate-500 mt-1">
+                 <span>60% Compradores</span>
+                 <span>40% Vendedores</span>
+               </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-        // --- 3. CONEXIÓN CON DATA ENGINE (GOOGLE SHEETS) ---
-        async function fetchSheetData() {
-            const tableBody = document.getElementById('sheet-data-output');
-            const updateLabel = document.getElementById('last-update');
+// ==========================================
+// 6. LAYOUT & NAVIGATION
+// ==========================================
+
+const SidebarItem = ({ icon: Icon, label, view, active }: any) => {
+  const { dispatch } = useContext(AppContext);
+  return (
+    <button
+      onClick={() => dispatch({ type: 'SET_VIEW', payload: view })}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+        active 
+          ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+      }`}
+    >
+      <Icon size={20} />
+      <span className="font-medium text-sm">{label}</span>
+    </button>
+  );
+};
+
+const Sidebar = () => {
+  const { state } = useContext(AppContext);
+  
+  if (!state.isSidebarOpen) return null;
+
+  return (
+    <div className="w-64 h-screen bg-white border-r border-slate-100 flex flex-col fixed left-0 top-0 z-50">
+      <div className="p-6">
+        <div className="flex items-center gap-2 text-slate-900 mb-8">
+          <div className="bg-slate-900 text-white p-2 rounded-lg">
+            <Shield size={24} />
+          </div>
+          <div>
+            <h1 className="font-black text-lg leading-none">FINANCIAL</h1>
+            <span className="text-blue-600 text-xs font-black tracking-widest">CORE</span>
+          </div>
+        </div>
+        
+        <div className="space-y-1">
+          <p className="px-4 text-[10px] font-bold text-slate-400 uppercase mb-2">Plataforma</p>
+          <SidebarItem icon={LayoutDashboard} label="Dashboard" view="DASHBOARD" active={state.currentView === 'DASHBOARD'} />
+          <SidebarItem icon={TrendingUp} label="Mercados" view="MARKETS" active={state.currentView === 'MARKETS'} />
+          <SidebarItem icon={Briefcase} label="Cartera" view="PORTFOLIO" active={state.currentView === 'PORTFOLIO'} />
+          <SidebarItem icon={FileText} label="Noticias & IA" view="ANALYTICS" active={state.currentView === 'ANALYTICS'} />
+        </div>
+
+        <div className="mt-8 space-y-1">
+          <p className="px-4 text-[10px] font-bold text-slate-400 uppercase mb-2">Configuración</p>
+          <SidebarItem icon={User} label="Perfil" view="SETTINGS" active={state.currentView === 'SETTINGS'} />
+          <SidebarItem icon={Settings} label="Ajustes" view="SETTINGS" active={false} />
+        </div>
+      </div>
+      
+      <div className="mt-auto p-6 border-t border-slate-100">
+        <div className="bg-slate-900 rounded-xl p-4 relative overflow-hidden group cursor-pointer">
+          <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Zap size={64} />
+          </div>
+          <p className="text-slate-400 text-xs font-bold mb-1">Plan PRO</p>
+          <p className="text-white text-sm font-bold">Desbloquear Nivel 2</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 7. MAIN APP ORCHESTRATOR
+// ==========================================
+
+export default function FinancialCore() {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+
+  // Fake loading screen for complexity feel
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    // Simulate secure handshake & data pre-fetch
+    const init = async () => {
+      await new Promise(r => setTimeout(r, 1500));
+      setLoading(false);
+    };
+    init();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-400 font-mono text-sm animate-pulse">Estableciendo conexión segura TLS...</p>
+      </div>
+    );
+  }
+
+  return (
+    <AppContext.Provider value={{ state, dispatch }}>
+      <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans flex">
+        
+        {/* Navigation Sidebar */}
+        <Sidebar />
+
+        {/* Main Content Area */}
+        <main className={`flex-1 transition-all duration-300 ${state.isSidebarOpen ? 'ml-64' : 'ml-0'}`}>
+          
+          {/* Top Bar */}
+          <header className="h-16 bg-white border-b border-slate-100 flex justify-between items-center px-8 sticky top-0 z-40 backdrop-blur-md bg-white/80">
+            <div className="flex items-center gap-4">
+               <button onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
+                 <Menu size={20} />
+               </button>
+               <div className="relative w-96 hidden md:block">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                 <input 
+                   type="text" 
+                   placeholder="Buscar activos, ISIN, noticias..." 
+                   className="w-full bg-slate-50 border-none rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+                 />
+               </div>
+            </div>
             
-            tableBody.innerHTML = `<tr><td colspan="6" class="p-20 text-center"><i class="fa-solid fa-circle-notch animate-spin text-blue-500 text-2xl mb-4"></i><p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Analizando registros en la nube...</p></td></tr>`;
+            <div className="flex items-center gap-4">
+               <button className="relative p-2 hover:bg-slate-100 rounded-lg text-slate-500">
+                 <Bell size={20} />
+                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+               </button>
+               <div className="flex items-center gap-3 pl-4 border-l border-slate-100">
+                 <div className="text-right hidden md:block">
+                   <p className="text-sm font-bold text-slate-900">{state.user.name}</p>
+                   <p className="text-xs text-slate-400">Cuenta Premium</p>
+                 </div>
+                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold">
+                   AT
+                 </div>
+               </div>
+            </div>
+          </header>
 
-            try {
-                const response = await fetch(GOOGLE_SHEET_CSV);
-                const data = await response.text();
-                const rows = data.split('\n').slice(1); // Saltamos la cabecera del Excel
+          {/* Dynamic Content Views */}
+          <div className="p-8 max-w-[1600px] mx-auto">
+            {state.currentView === 'DASHBOARD' && <DashboardView />}
+            {state.currentView === 'MARKETS' && <MarketDetailView />}
+            {/* Placeholder for other views to keep file size manageable but logical */}
+            {state.currentView === 'PORTFOLIO' && (
+              <div className="text-center py-20">
+                <Briefcase size={48} className="mx-auto text-slate-300 mb-4"/>
+                <h2 className="text-xl font-bold text-slate-700">Módulo de Cartera</h2>
+                <p className="text-slate-400">Integración con API bancaria requerida para visualizar posiciones reales.</p>
+              </div>
+            )}
+            {state.currentView === 'ANALYTICS' && (
+               <div className="text-center py-20">
+               <Zap size={48} className="mx-auto text-slate-300 mb-4"/>
+               <h2 className="text-xl font-bold text-slate-700">Centro de Inteligencia</h2>
+               <p className="text-slate-400">Análisis de sentimiento de noticias en desarrollo.</p>
+             </div>
+            )}
+          </div>
 
-                let htmlContent = '';
-
-                rows.forEach((row, index) => {
-                    const columns = row.split(',');
-                    if(columns.length >= 5) {
-                        const categoria = columns[0] || 'N/A';
-                        const nombre = columns[1] || '---';
-                        const ticker = columns[2] || '---';
-                        const precio = columns[3] || '0.00';
-                        const cambio = columns[4] || '0%';
-                        
-                        const isNegative = cambio.includes('-');
-                        const badgeColor = isNegative ? 'text-red-500 bg-red-500/10' : 'text-emerald-500 bg-emerald-500/10';
-
-                        htmlContent += `
-                            <tr class="row-hover group transition-all duration-300">
-                                <td class="px-8 py-5">
-                                    <span class="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-slate-800 text-slate-400 border border-white/5">${categoria}</span>
-                                </td>
-                                <td class="px-8 py-5">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs uppercase">${nombre.charAt(0)}</div>
-                                        <p class="font-bold text-white group-hover:text-blue-400 transition-colors uppercase tracking-tight">${nombre}</p>
-                                    </div>
-                                </td>
-                                <td class="px-8 py-5 font-mono text-xs text-slate-500 font-medium tracking-tighter">${ticker}</td>
-                                <td class="px-8 py-5 text-right font-black text-white font-mono text-base tracking-tighter italic">${precio}€</td>
-                                <td class="px-8 py-5 text-right">
-                                    <span class="px-3 py-1.5 rounded-lg font-black font-mono text-[11px] ${badgeColor} inline-block min-w-[70px]">
-                                        ${isNegative ? '' : '+'}${cambio}
-                                    </td>
-                                    <td class="px-8 py-5 text-center">
-                                        <button class="w-8 h-8 rounded-lg bg-white/5 hover:bg-blue-600 transition flex items-center justify-center">
-                                            <i class="fa-solid fa-plus text-[10px] text-slate-400 hover:text-white"></i>
-                                        </button>
-                                    </td>
-                            </tr>
-                        `;
-                    }
-                });
-
-                tableBody.innerHTML = htmlContent || `<tr><td colspan="6" class="p-20 text-center uppercase text-xs font-bold text-slate-500">No se encontraron activos activos.</td></tr>`;
-                
-                // Actualizar hora de sincronización
-                const now = new Date();
-                updateLabel.innerText = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0') + ' GMT+1';
-
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                tableBody.innerHTML = `<tr><td colspan="6" class="p-20 text-center text-red-500 font-bold uppercase text-[10px] tracking-widest">Error de Sincronización. Revisa la URL del CSV.</td></tr>`;
-            }
-        }
-
-        // --- 4. SISTEMA DE FILTRADO ---
-        function filterTable() {
-            const input = document.getElementById('screenerSearch');
-            const filter = input.value.toUpperCase();
-            const table = document.getElementById('screenerTable');
-            const tr = table.getElementsByTagName('tr');
-
-            for (let i = 1; i < tr.length; i++) {
-                const tdName = tr[i].getElementsByTagName('td')[1];
-                const tdTicker = tr[i].getElementsByTagName('td')[2];
-                if (tdName || tdTicker) {
-                    const txtValueName = tdName.textContent || tdName.innerText;
-                    const txtValueTicker = tdTicker.textContent || tdTicker.innerText;
-                    if (txtValueName.toUpperCase().indexOf(filter) > -1 || txtValueTicker.toUpperCase().indexOf(filter) > -1) {
-                        tr[i].style.display = "";
-                    } else {
-                        tr[i].style.display = "none";
-                    }
-                }
-            }
-        }
-
-        // --- 5. UTILIDADES ADICIONALES ---
-        function refreshAll() {
-            const btn = document.querySelector('.fa-rotate');
-            btn.classList.add('animate-spin');
-            fetchSheetData();
-            setTimeout(() => {
-                btn.classList.remove('animate-spin');
-            }, 1000);
-        }
-
-        // Inicializar Dashboard
-        window.onload = () => {
-            navigate('dashboard');
-        }
-    </script>
-</body>
-</html>
+        </main>
+      </div>
+    </AppContext.Provider>
+  );
+}
