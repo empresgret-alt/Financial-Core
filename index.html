@@ -1,569 +1,142 @@
-import React, { useState, useEffect, useContext, useReducer, useMemo, createContext } from 'react';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
-  ResponsiveContainer, BarChart, Bar, Cell, ReferenceLine 
-} from 'recharts';
-import { 
-  LayoutDashboard, PieChart, TrendingUp, Activity, Bell, Settings, 
-  Search, Menu, X, ArrowUpRight, ArrowDownRight, Briefcase, 
-  User, ChevronRight, Lock, Zap, FileText, Globe, Shield
-} from 'lucide-react';
+import pandas as pd
+import xlsxwriter
+from datetime import datetime
 
-// ==========================================
-// 1. TYPE DEFINITIONS & INTERFACES (TypeScript Strong Typing)
-// ==========================================
+# Crear el nombre del archivo
+filename = 'Financial_Core_Albert_Luengo.xlsx'
+writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+workbook = writer.book
 
-type ViewState = 'DASHBOARD' | 'MARKETS' | 'PORTFOLIO' | 'ANALYTICS' | 'SETTINGS';
+# --- FORMATOS PROFESIONALES (ESTILO DARK MODE / BLOOMBERG) ---
+bg_color = '#0f172a' # Slate 900
+text_color = '#f8fafc' # Slate 50
+accent_color = '#2563eb' # Blue 600
+card_color = '#1e293b' # Slate 800
+success_color = '#10b981' # Green 500
 
-interface Stock {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number;
-  marketCap: string;
-  sector: string;
-  history: { time: string; value: number }[];
-}
+fmt_header = workbook.add_format({'bold': True, 'font_color': text_color, 'bg_color': card_color, 'border': 0, 'align': 'center', 'valign': 'vcenter', 'font_size': 12})
+fmt_cell = workbook.add_format({'font_color': text_color, 'bg_color': bg_color, 'border': 0, 'align': 'center', 'valign': 'vcenter'})
+fmt_currency = workbook.add_format({'num_format': '#,##0.00 "€"', 'font_color': text_color, 'bg_color': bg_color, 'align': 'center'})
+fmt_percent = workbook.add_format({'num_format': '0.00%', 'font_color': text_color, 'bg_color': bg_color, 'align': 'center'})
+fmt_title = workbook.add_format({'bold': True, 'font_color': accent_color, 'bg_color': bg_color, 'font_size': 24, 'align': 'left'})
+fmt_card = workbook.add_format({'bg_color': card_color, 'font_color': text_color, 'align': 'left', 'valign': 'top', 'border': 0})
+fmt_card_title = workbook.add_format({'bg_color': card_color, 'font_color': '#94a3b8', 'font_size': 10, 'bold': True})
+fmt_card_value = workbook.add_format({'bg_color': card_color, 'font_color': text_color, 'font_size': 18, 'bold': True})
 
-interface PortfolioItem {
-  symbol: string;
-  shares: number;
-  avgPrice: number;
-}
+# --- DATOS CARGADOS DE TUS ARCHIVOS ---
+# Fusionando tus datos reales para la tabla maestra
+data_master = [
+    # Activos Reales (Extraídos de tu Excel)
+    ['IE00BYX5NX33', 'Fidelity MSCI World Index', 'MYINVESTOR', 'Fondo', 1500, 1.0, 1500, 0.60],
+    ['LU1213836080', 'Fidelity Global Tech', 'MYINVESTOR', 'Fondo', 1000, 1.0, 1000, 0.60],
+    ['IE000QAZP7L2', 'iShares Emerging Mkts', 'MYINVESTOR', 'Fondo', 750, 1.0, 750, 0.60],
+    ['FR0000989626', 'Groupama Trésorerie', 'MYINVESTOR', 'Fondo', 1250, 1.0, 1250, 0.60],
+    ['LIN.MC', 'Línea Directa', 'MEXEM', 'Acción', 1000, 0.95, 950, 0.20], # Ejemplo agregado según contexto
+    ['MSFT', 'Microsoft Corp', 'MEXEM', 'Acción', 5, 280, 1400, 0.20], # Ejemplo LdS
+    ['CASH', 'Efectivo', 'SANTANDER', 'Liquidez', 800, 1, 800, 0.00],
+    ['BTC-EUR', 'Bitcoin', 'BITVAVO', 'Cripto', 0.05, 42000, 2100, 0.05],
+]
+df_master = pd.DataFrame(data_master, columns=['TICKER/ISIN', 'NOMBRE', 'PLATAFORMA', 'TIPO', 'CANTIDAD', 'PRECIO_COMPRA', 'VALOR_ACTUAL', 'TARGET_ALLOCATION'])
 
-interface UserProfile {
-  name: string;
-  balance: number;
-  riskProfile: 'Conservative' | 'Moderate' | 'Aggressive';
-}
+# --- HOJA 1: DASHBOARD (UI VISUAL) ---
+ws_dash = workbook.add_worksheet('DASHBOARD')
+ws_dash.hide_gridlines(2) # Ocultar grid
+ws_dash.set_zoom(85)
+ws_dash.set_tab_color(accent_color)
 
-interface AppState {
-  currentView: ViewState;
-  selectedStock: Stock | null;
-  portfolio: PortfolioItem[];
-  user: UserProfile;
-  isSidebarOpen: boolean;
-  notifications: string[];
-}
+# Fondo oscuro total
+for row in range(0, 100):
+    ws_dash.set_row(row, 20, fmt_cell)
+for col in range(0, 20):
+    ws_dash.set_column(col, col, 12, fmt_cell)
 
-// ==========================================
-// 2. MOCK DATA GENERATORS (Complex Logic)
-// ==========================================
+# Header
+ws_dash.merge_range('B2:H3', 'FINANCIAL CORE | ALBERT LUENGO', fmt_title)
+ws_dash.write('B4', 'ESTRATEGIA 2026: AGGRESSIVE GROWTH', workbook.add_format({'font_color': '#94a3b8', 'bg_color': bg_color, 'italic': True}))
 
-const generateBrownianMotion = (startPrice: number, steps: number) => {
-  let current = startPrice;
-  return Array.from({ length: steps }).map((_, i) => {
-    const volatility = 0.02; // 2% volatility
-    const drift = 0.0005; // Slight upward drift
-    const change = current * (drift + volatility * (Math.random() - 0.5));
-    current += change;
-    return {
-      time: i.toString(), // Simplified time for XAxis
-      value: parseFloat(current.toFixed(2))
-    };
-  });
-};
+# Tarjetas KPI
+ws_dash.merge_range('B6:D9', '', fmt_card)
+ws_dash.write('B6', '  PATRIMONIO NETO', fmt_card_title)
+ws_dash.write('B7', '  29,650.00 €', fmt_card_value) # Dato de tu foto financiera
 
-const MOCK_STOCKS: Stock[] = [
-  { symbol: 'LIN.MC', name: 'Línea Directa', price: 1.025, change: 0.015, changePercent: 1.45, volume: 1500200, marketCap: '1.1B', sector: 'Insurance', history: generateBrownianMotion(0.90, 50) },
-  { symbol: 'IBE.MC', name: 'Iberdrola', price: 11.45, change: -0.05, changePercent: -0.45, volume: 4500000, marketCap: '72B', sector: 'Utilities', history: generateBrownianMotion(11.2, 50) },
-  { symbol: 'ITX.MC', name: 'Inditex', price: 42.10, change: 0.80, changePercent: 1.90, volume: 1200000, marketCap: '130B', sector: 'Consumer', history: generateBrownianMotion(40.5, 50) },
-  { symbol: 'SAN.MC', name: 'Banco Santander', price: 4.80, change: 0.02, changePercent: 0.40, volume: 32000000, marketCap: '76B', sector: 'Finance', history: generateBrownianMotion(4.6, 50) },
-];
+ws_dash.merge_range('E6:G9', '', fmt_card)
+ws_dash.write('E6', '  OBJETIVO 2026 (15k Net Equity)', fmt_card_title)
+ws_dash.write('E7', '  197.6%', workbook.add_format({'bg_color': card_color, 'font_color': success_color, 'font_size': 18, 'bold': True}))
+ws_dash.write('E8', '  Meta Superada', fmt_card_title)
 
-// ==========================================
-// 3. GLOBAL STATE MANAGEMENT (Context + Reducer)
-// ==========================================
+# Gráfico de Asignación (Simulado con Excel Charts)
+chart_pie = workbook.add_chart({'type': 'doughnut'})
+chart_pie.add_series({
+    'name': 'Distribución por Plataforma',
+    'categories': '=DATA_ENGINE!C2:C9',
+    'values': '=DATA_ENGINE!G2:G9',
+    'data_labels': {'percentage': True},
+})
+chart_pie.set_style(10)
+chart_pie.set_chartarea({'fill': {'color': bg_color}, 'border': {'none': True}})
+chart_pie.set_plotarea({'fill': {'color': bg_color}, 'border': {'none': True}})
+chart_pie.set_legend({'position': 'right', 'font': {'color': text_color}})
+chart_pie.set_title({'name': 'Asset Allocation', 'name_font': {'color': text_color, 'bold': True}})
 
-const initialState: AppState = {
-  currentView: 'DASHBOARD',
-  selectedStock: MOCK_STOCKS[0],
-  portfolio: [
-    { symbol: 'LIN.MC', shares: 1000, avgPrice: 0.95 },
-    { symbol: 'ITX.MC', shares: 50, avgPrice: 38.00 }
-  ],
-  user: { name: 'Alex Trader', balance: 15420.50, riskProfile: 'Aggressive' },
-  isSidebarOpen: true,
-  notifications: []
-};
+ws_dash.insert_chart('B11', chart_pie, {'x_offset': 0, 'y_offset': 0, 'x_scale': 1.5, 'y_scale': 1.5})
 
-type Action = 
-  | { type: 'SET_VIEW'; payload: ViewState }
-  | { type: 'SELECT_STOCK'; payload: Stock }
-  | { type: 'TOGGLE_SIDEBAR' }
-  | { type: 'ADD_NOTIFICATION'; payload: string };
+# --- HOJA 2: DATA_ENGINE (Base de Datos) ---
+ws_data = workbook.add_worksheet('DATA_ENGINE')
+ws_data.set_tab_color('#64748b')
 
-const appReducer = (state: AppState, action: Action): AppState => {
-  switch (action.type) {
-    case 'SET_VIEW': return { ...state, currentView: action.payload };
-    case 'SELECT_STOCK': return { ...state, selectedStock: action.payload, currentView: 'MARKETS' };
-    case 'TOGGLE_SIDEBAR': return { ...state, isSidebarOpen: !state.isSidebarOpen };
-    case 'ADD_NOTIFICATION': return { ...state, notifications: [action.payload, ...state.notifications] };
-    default: return state;
-  }
-};
+# Escribir tabla maestra
+# Headers
+headers = df_master.columns.tolist()
+for col_num, value in enumerate(headers):
+    ws_data.write(0, col_num, value, fmt_header)
 
-const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action> }>({
-  state: initialState,
-  dispatch: () => null
-});
+# Datos
+for row_num, row_data in enumerate(df_master.values.tolist()):
+    for col_num, value in enumerate(row_data):
+        if col_num in [5, 6]: # Moneda
+            ws_data.write(row_num + 1, col_num, value, fmt_currency)
+        elif col_num == 7: # Porcentaje
+            ws_data.write(row_num + 1, col_num, value, fmt_percent)
+        else:
+            ws_data.write(row_num + 1, col_num, value, fmt_cell)
 
-// ==========================================
-// 4. UI COMPONENT LIBRARY (Atomic Design)
-// ==========================================
+# Añadir columnas calculadas para Excel Stocks
+ws_data.write(0, 8, 'PRECIO_VIVO', fmt_header)
+ws_data.write(0, 9, 'CAMBIO_DIA', fmt_header)
+ws_data.write(0, 10, 'VALOR_MERCADO', fmt_header)
 
-const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-  <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm ${className}`}>
-    {children}
-  </div>
-);
+# Fórmulas de Excel (Strings)
+for i in range(1, len(df_master) + 1):
+    # Nota: Estas fórmulas requieren que el usuario convierta la col A en "Stocks" data type manualmente
+    ws_data.write_formula(i, 8, f'=IFERROR(A{i+1}.Price, F{i+1})', fmt_currency) 
+    ws_data.write_formula(i, 9, f'=IFERROR(A{i+1}.Change, 0)', fmt_currency)
+    ws_data.write_formula(i, 10, f'=E{i+1}*I{i+1}', fmt_currency)
 
-const Badge = ({ children, type = 'neutral' }: { children: React.ReactNode, type?: 'success' | 'danger' | 'neutral' | 'warning' }) => {
-  const styles = {
-    success: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-    danger: 'bg-rose-50 text-rose-600 border-rose-100',
-    warning: 'bg-amber-50 text-amber-600 border-amber-100',
-    neutral: 'bg-slate-50 text-slate-600 border-slate-100'
-  };
-  return (
-    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${styles[type]}`}>
-      {children}
-    </span>
-  );
-};
+ws_data.set_column('A:K', 18)
 
-const Button = ({ children, onClick, variant = 'primary', icon: Icon }: any) => {
-  const baseStyle = "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95";
-  const variants = {
-    primary: "bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-200",
-    secondary: "bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50",
-    ghost: "text-slate-500 hover:bg-slate-100"
-  };
-  return (
-    <button onClick={onClick} className={`${baseStyle} ${variants[variant as keyof typeof variants]}`}>
-      {Icon && <Icon size={16} />}
-      {children}
-    </button>
-  );
-};
+# --- HOJA 3: ESTRATEGIA 2026 (Texto) ---
+ws_strat = workbook.add_worksheet('ESTRATEGIA_2026')
+ws_strat.hide_gridlines(2)
+ws_strat.set_tab_color('#f59e0b') # Amber
 
-// ==========================================
-// 5. SUB-VIEWS (Modular Logic)
-// ==========================================
+ws_strat.write('B2', 'ESTRATEGIA DE INVERSIÓN 2026', fmt_title)
+strat_text = [
+    "OBJETIVO: 15.000€ Net Equity (Meta superada actualmente: 29.650€)",
+    "PERFIL: Agresivo | Tolerancia Alta VIX",
+    "---",
+    "ASSET ALLOCATION (TARGET):",
+    "1. MYINVESTOR (60%) - Núcleo de la cartera (Fondos Indexados)",
+    "2. MEXEM (20%) - Alpha (Acciones Individuales)",
+    "3. TRADE REPUBLIC (15%) - Seguridad (Bonos/Liquidez)",
+    "4. BITVAVO (5%) - Asimetría (Bitcoin/Crypto)",
+    "---",
+    "REGLAS:",
+    "- Aportación mensual: 600€",
+    "- Rebalanceo: Semestral"
+]
 
-// --- VIEW: DASHBOARD ---
-const DashboardView = () => {
-  const { state, dispatch } = useContext(AppContext);
-  
-  // Calculate total portfolio value
-  const portfolioValue = useMemo(() => {
-    return state.portfolio.reduce((acc, item) => {
-      const stock = MOCK_STOCKS.find(s => s.symbol === item.symbol);
-      return acc + (stock ? stock.price * item.shares : 0);
-    }, 0);
-  }, [state.portfolio]);
+for i, line in enumerate(strat_text):
+    ws_strat.write(4 + i, 1, line, workbook.add_format({'font_color': bg_color if i%3==0 else '#1e293b', 'font_size': 12}))
 
-  const totalAssets = portfolioValue + state.user.balance;
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Welcome Header */}
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Resumen Financiero</h2>
-          <p className="text-slate-500">Bienvenido de nuevo, {state.user.name}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Patrimonio Total</p>
-          <h1 className="text-4xl font-black text-slate-900">{totalAssets.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</h1>
-        </div>
-      </div>
-
-      {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-none">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-white/10 rounded-lg"><Activity /></div>
-            <span className="bg-white/20 px-2 py-1 rounded text-xs font-bold">+12.5% YTD</span>
-          </div>
-          <p className="text-blue-100 text-sm">Rendimiento Cartera</p>
-          <h3 className="text-3xl font-bold mt-1">Excellent</h3>
-        </Card>
-        <Card className="p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><TrendingUp /></div>
-          </div>
-          <p className="text-slate-500 text-sm">Liquidez Disponible</p>
-          <h3 className="text-2xl font-bold text-slate-800">{state.user.balance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</h3>
-        </Card>
-        <Card className="p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><PieChart /></div>
-          </div>
-          <p className="text-slate-500 text-sm">Activos Totales</p>
-          <h3 className="text-2xl font-bold text-slate-800">{state.portfolio.length} Posiciones</h3>
-        </Card>
-      </div>
-
-      {/* Market Movers Table */}
-      <Card className="p-0 overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="font-bold text-lg">Mercado en Vivo</h3>
-          <Button variant="ghost" onClick={() => dispatch({ type: 'SET_VIEW', payload: 'MARKETS' })}>Ver Todo</Button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 text-slate-500 font-medium">
-              <tr>
-                <th className="px-6 py-4">Activo</th>
-                <th className="px-6 py-4">Precio</th>
-                <th className="px-6 py-4">Cambio</th>
-                <th className="px-6 py-4 hidden md:table-cell">Volumen</th>
-                <th className="px-6 py-4">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MOCK_STOCKS.map((stock) => (
-                <tr key={stock.symbol} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs text-slate-600">
-                      {stock.symbol.substring(0,2)}
-                    </div>
-                    {stock.name}
-                  </td>
-                  <td className="px-6 py-4 font-mono">{stock.price.toFixed(3)}€</td>
-                  <td className="px-6 py-4">
-                    <Badge type={stock.change >= 0 ? 'success' : 'danger'}>
-                      {stock.change > 0 ? '+' : ''}{stock.changePercent}%
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-slate-400 hidden md:table-cell">{(stock.volume / 1000).toFixed(1)}k</td>
-                  <td className="px-6 py-4">
-                    <button 
-                      onClick={() => dispatch({ type: 'SELECT_STOCK', payload: stock })}
-                      className="text-blue-600 hover:text-blue-800 font-bold text-xs"
-                    >
-                      ANALIZAR
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-// --- VIEW: MARKET DETAIL (Chart Complexity) ---
-const MarketDetailView = () => {
-  const { state } = useContext(AppContext);
-  const stock = state.selectedStock;
-
-  if (!stock) return <div>Selecciona un activo</div>;
-
-  // Simulate Order Book Data
-  const orderBookData = useMemo(() => {
-    return Array.from({ length: 14 }).map((_, i) => ({
-      price: stock.price + (i - 7) * 0.01,
-      volume: Math.floor(Math.random() * 5000),
-      type: i < 7 ? 'bid' : 'ask'
-    }));
-  }, [stock]);
-
-  return (
-    <div className="h-full flex flex-col gap-6 animate-in slide-in-from-right-4 duration-300">
-      {/* Header Info */}
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-3xl font-black text-slate-900">{stock.name}</h1>
-            <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs font-mono font-bold">{stock.symbol}</span>
-          </div>
-          <p className="text-slate-500">{stock.sector} • IBEX 35</p>
-        </div>
-        <div className="flex gap-4">
-          <Button variant="secondary" icon={Bell}>Alertar</Button>
-          <Button variant="primary" icon={Zap}>Operar</Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-        {/* Main Chart Area */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="p-6 h-[450px] flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-slate-700">Acción de Precio</h3>
-              <div className="flex gap-2">
-                {['1H', '1D', '1W', '1M', '1Y'].map(t => (
-                  <button key={t} className="px-2 py-1 text-xs font-bold text-slate-400 hover:text-blue-600">{t}</button>
-                ))}
-              </div>
-            </div>
-            <div className="flex-1 w-full min-h-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stock.history}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="time" hide />
-                  <YAxis domain={['auto', 'auto']} orientation="right" tick={{fontSize: 11, fill: '#94a3b8'}} axisLine={false} tickLine={false}/>
-                  <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                  <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          {/* Fundamentals */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="p-4 text-center">
-              <p className="text-xs text-slate-400 uppercase font-bold">Cap. Mercado</p>
-              <p className="font-bold text-slate-800">{stock.marketCap}</p>
-            </Card>
-            <Card className="p-4 text-center">
-              <p className="text-xs text-slate-400 uppercase font-bold">Volumen</p>
-              <p className="font-bold text-slate-800">{(stock.volume/1000000).toFixed(2)}M</p>
-            </Card>
-            <Card className="p-4 text-center">
-              <p className="text-xs text-slate-400 uppercase font-bold">Rango 52S</p>
-              <p className="font-bold text-slate-800">{(stock.price * 0.8).toFixed(2)} - {(stock.price * 1.2).toFixed(2)}</p>
-            </Card>
-            <Card className="p-4 text-center">
-              <p className="text-xs text-slate-400 uppercase font-bold">Beta</p>
-              <p className="font-bold text-slate-800">0.85</p>
-            </Card>
-          </div>
-        </div>
-
-        {/* Order Book (Depth) */}
-        <div className="space-y-6">
-          <Card className="p-0 h-[600px] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="font-bold text-sm text-slate-700 flex items-center gap-2">
-                <Activity size={16} /> Profundidad de Mercado
-              </h3>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-2">
-              <div className="flex text-[10px] text-slate-400 font-bold mb-2 px-2">
-                <span className="flex-1">PRECIO</span>
-                <span className="flex-1 text-right">CANTIDAD</span>
-                <span className="w-12 text-right">TOTAL</span>
-              </div>
-              
-              {/* Asks (Sell Orders) - Red */}
-              <div className="flex flex-col-reverse gap-1 mb-2 border-b border-slate-100 pb-2">
-                {orderBookData.filter(d => d.type === 'ask').map((order, i) => (
-                  <div key={i} className="flex justify-between text-xs relative group cursor-pointer hover:bg-slate-50 px-2 py-0.5">
-                    <div className="absolute right-0 top-0 bottom-0 bg-red-50 z-0" style={{ width: `${Math.random() * 100}%` }}></div>
-                    <span className="text-red-500 font-mono z-10 relative">{order.price.toFixed(3)}</span>
-                    <span className="text-slate-600 z-10 relative">{order.volume}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="text-center py-2 font-bold text-lg text-slate-800 bg-slate-50 my-1 rounded">
-                {stock.price.toFixed(3)}€
-              </div>
-
-              {/* Bids (Buy Orders) - Green */}
-              <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-2">
-                {orderBookData.filter(d => d.type === 'bid').map((order, i) => (
-                  <div key={i} className="flex justify-between text-xs relative group cursor-pointer hover:bg-slate-50 px-2 py-0.5">
-                    <div className="absolute right-0 top-0 bottom-0 bg-emerald-50 z-0" style={{ width: `${Math.random() * 100}%` }}></div>
-                    <span className="text-emerald-600 font-mono z-10 relative">{order.price.toFixed(3)}</span>
-                    <span className="text-slate-600 z-10 relative">{order.volume}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="p-4 border-t border-slate-100 bg-slate-50">
-               <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex">
-                 <div className="h-full bg-emerald-500 w-[60%]"></div>
-                 <div className="h-full bg-red-500 w-[40%]"></div>
-               </div>
-               <div className="flex justify-between text-[10px] font-bold text-slate-500 mt-1">
-                 <span>60% Compradores</span>
-                 <span>40% Vendedores</span>
-               </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// 6. LAYOUT & NAVIGATION
-// ==========================================
-
-const SidebarItem = ({ icon: Icon, label, view, active }: any) => {
-  const { dispatch } = useContext(AppContext);
-  return (
-    <button
-      onClick={() => dispatch({ type: 'SET_VIEW', payload: view })}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-        active 
-          ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
-          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-      }`}
-    >
-      <Icon size={20} />
-      <span className="font-medium text-sm">{label}</span>
-    </button>
-  );
-};
-
-const Sidebar = () => {
-  const { state } = useContext(AppContext);
-  
-  if (!state.isSidebarOpen) return null;
-
-  return (
-    <div className="w-64 h-screen bg-white border-r border-slate-100 flex flex-col fixed left-0 top-0 z-50">
-      <div className="p-6">
-        <div className="flex items-center gap-2 text-slate-900 mb-8">
-          <div className="bg-slate-900 text-white p-2 rounded-lg">
-            <Shield size={24} />
-          </div>
-          <div>
-            <h1 className="font-black text-lg leading-none">FINANCIAL</h1>
-            <span className="text-blue-600 text-xs font-black tracking-widest">CORE</span>
-          </div>
-        </div>
-        
-        <div className="space-y-1">
-          <p className="px-4 text-[10px] font-bold text-slate-400 uppercase mb-2">Plataforma</p>
-          <SidebarItem icon={LayoutDashboard} label="Dashboard" view="DASHBOARD" active={state.currentView === 'DASHBOARD'} />
-          <SidebarItem icon={TrendingUp} label="Mercados" view="MARKETS" active={state.currentView === 'MARKETS'} />
-          <SidebarItem icon={Briefcase} label="Cartera" view="PORTFOLIO" active={state.currentView === 'PORTFOLIO'} />
-          <SidebarItem icon={FileText} label="Noticias & IA" view="ANALYTICS" active={state.currentView === 'ANALYTICS'} />
-        </div>
-
-        <div className="mt-8 space-y-1">
-          <p className="px-4 text-[10px] font-bold text-slate-400 uppercase mb-2">Configuración</p>
-          <SidebarItem icon={User} label="Perfil" view="SETTINGS" active={state.currentView === 'SETTINGS'} />
-          <SidebarItem icon={Settings} label="Ajustes" view="SETTINGS" active={false} />
-        </div>
-      </div>
-      
-      <div className="mt-auto p-6 border-t border-slate-100">
-        <div className="bg-slate-900 rounded-xl p-4 relative overflow-hidden group cursor-pointer">
-          <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Zap size={64} />
-          </div>
-          <p className="text-slate-400 text-xs font-bold mb-1">Plan PRO</p>
-          <p className="text-white text-sm font-bold">Desbloquear Nivel 2</p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// 7. MAIN APP ORCHESTRATOR
-// ==========================================
-
-export default function FinancialCore() {
-  const [state, dispatch] = useReducer(appReducer, initialState);
-
-  // Fake loading screen for complexity feel
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    // Simulate secure handshake & data pre-fetch
-    const init = async () => {
-      await new Promise(r => setTimeout(r, 1500));
-      setLoading(false);
-    };
-    init();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
-        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 font-mono text-sm animate-pulse">Estableciendo conexión segura TLS...</p>
-      </div>
-    );
-  }
-
-  return (
-    <AppContext.Provider value={{ state, dispatch }}>
-      <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans flex">
-        
-        {/* Navigation Sidebar */}
-        <Sidebar />
-
-        {/* Main Content Area */}
-        <main className={`flex-1 transition-all duration-300 ${state.isSidebarOpen ? 'ml-64' : 'ml-0'}`}>
-          
-          {/* Top Bar */}
-          <header className="h-16 bg-white border-b border-slate-100 flex justify-between items-center px-8 sticky top-0 z-40 backdrop-blur-md bg-white/80">
-            <div className="flex items-center gap-4">
-               <button onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
-                 <Menu size={20} />
-               </button>
-               <div className="relative w-96 hidden md:block">
-                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                 <input 
-                   type="text" 
-                   placeholder="Buscar activos, ISIN, noticias..." 
-                   className="w-full bg-slate-50 border-none rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 transition-all"
-                 />
-               </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-               <button className="relative p-2 hover:bg-slate-100 rounded-lg text-slate-500">
-                 <Bell size={20} />
-                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-               </button>
-               <div className="flex items-center gap-3 pl-4 border-l border-slate-100">
-                 <div className="text-right hidden md:block">
-                   <p className="text-sm font-bold text-slate-900">{state.user.name}</p>
-                   <p className="text-xs text-slate-400">Cuenta Premium</p>
-                 </div>
-                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold">
-                   AT
-                 </div>
-               </div>
-            </div>
-          </header>
-
-          {/* Dynamic Content Views */}
-          <div className="p-8 max-w-[1600px] mx-auto">
-            {state.currentView === 'DASHBOARD' && <DashboardView />}
-            {state.currentView === 'MARKETS' && <MarketDetailView />}
-            {/* Placeholder for other views to keep file size manageable but logical */}
-            {state.currentView === 'PORTFOLIO' && (
-              <div className="text-center py-20">
-                <Briefcase size={48} className="mx-auto text-slate-300 mb-4"/>
-                <h2 className="text-xl font-bold text-slate-700">Módulo de Cartera</h2>
-                <p className="text-slate-400">Integración con API bancaria requerida para visualizar posiciones reales.</p>
-              </div>
-            )}
-            {state.currentView === 'ANALYTICS' && (
-               <div className="text-center py-20">
-               <Zap size={48} className="mx-auto text-slate-300 mb-4"/>
-               <h2 className="text-xl font-bold text-slate-700">Centro de Inteligencia</h2>
-               <p className="text-slate-400">Análisis de sentimiento de noticias en desarrollo.</p>
-             </div>
-            )}
-          </div>
-
-        </main>
-      </div>
-    </AppContext.Provider>
-  );
-}
+# Cerrar
+writer.close()
